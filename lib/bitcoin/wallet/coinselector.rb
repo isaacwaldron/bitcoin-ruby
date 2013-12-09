@@ -18,7 +18,7 @@ module Bitcoin::Wallet
           next  if txout.get_next_in
           next  if Bitcoin.namecoin? && txout.type.to_s =~ /^name_/
           next  unless txout.get_address
-          next  unless txout.get_tx.get_block
+          #next  unless txout.get_tx.get_block
           txouts << txout
           return txouts  if txouts.map(&:value).inject(:+) >= value
         rescue

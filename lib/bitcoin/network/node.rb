@@ -54,7 +54,7 @@ module Bitcoin::Network
       :connect => [],
       :command => ["127.0.0.1", 9999],
       :storage => "utxo::sqlite://~/.bitcoin-ruby/<network>/blocks.db",
-      :mode => :full,
+      :mode => :spv,
       :cache_head => true,
       :index_nhash => false,
       :dns => true,
@@ -76,7 +76,7 @@ module Bitcoin::Network
         :unconfirmed => 100,
       },
       :intervals => {
-        :queue => 1,
+        :queue => 0.1,
         :inv_queue => 1,
         :addrs => 5,
         :connect => 5,
@@ -253,6 +253,7 @@ module Bitcoin::Network
           self.stop
         end
 
+        EM.add_periodic_timer(5) { @last_getblocks = nil }
       end
     end
 
@@ -335,15 +336,12 @@ module Bitcoin::Network
 
     # query blocks from random peer
     def getblocks locator = store.get_locator
+      return  if @last_getblocks && @last_getblocks == locator
+      @last_getblocks = locator
       peer = @connections.select(&:connected?).sample
       return  unless peer
       log.info { "querying blocks from #{peer.host}:#{peer.port}" }
-      case @config[:mode]
-      when /lite/
-        peer.send_getheaders locator  unless @queue.size >= @config[:max][:queue]
-      when /full|pruned/
-        peer.send_getblocks locator  unless @inv_queue.size >= @config[:max][:inv]
-      end
+      peer.send_getblocks locator  unless @inv_queue.size >= @config[:max][:inv]
     end
 
     # check if the addr store is full and request new addrs
@@ -389,6 +387,9 @@ module Bitcoin::Network
               getblocks  if res[1] == 2 && @store.in_sync?
             end
           else
+
+            @store.send("new_#{obj[0]}", obj[1])
+
             drop = @unconfirmed.size - @config[:max][:unconfirmed] + 1
             drop.times { @unconfirmed.shift }  if drop > 0
             unless @unconfirmed[obj[1].hash]

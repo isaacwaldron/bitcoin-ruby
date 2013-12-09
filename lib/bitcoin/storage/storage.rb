@@ -152,7 +152,7 @@ module Bitcoin::Storage
         res = store_block(blk)
         log.info { "block #{blk.hash} " +
           "[#{res[0]}, #{['main', 'side', 'orphan'][res[1]]}] " +
-          "(#{"%.4fs, %3dtx, %.3fkb" % [(Time.now - time), blk.tx.size, blk.payload.bytesize.to_f/1000]})" }  if res && res[1]
+          "(#{"%.4fs, %3dtx, %.3fkb" % [(Time.now - time), blk.tx.size, blk.to_payload.bytesize.to_f/1000]})" }  if res && res[1]
         res
       end
 
@@ -169,12 +169,13 @@ module Bitcoin::Storage
         end
 
         prev_block = get_block(blk.prev_block.reverse_hth)
-        unless @config[:skip_validation]
-          validator = blk.validator(self, prev_block)
-          validator.validate(rules: [:syntax], raise_errors: true)
-        end
+        # unless @config[:skip_validation]
+        #   validator = blk.validator(self, prev_block)
+        #   validator.validate(rules: [:syntax], raise_errors: true)
+        # end
 
         if !prev_block || prev_block.chain == ORPHAN
+          #if blk.prev_block.reverse_hth == Bitcoin.network[:genesis_hash]
           if blk.hash == Bitcoin.network[:genesis_hash]
             log.debug { "=> genesis (0)" }
             return persist_block(blk, MAIN, 0)
@@ -195,13 +196,14 @@ module Bitcoin::Storage
         if prev_block.chain == MAIN
           if prev_block == get_head
             log.debug { "=> main (#{depth})" }
-            if !@config[:skip_validation] && ( !@checkpoints.any? || depth > @checkpoints.keys.last )
-              if self.class.name =~ /UtxoStore/
-                @config[:utxo_cache] = 0
-                @config[:block_cache] = 120
-              end
-              validator.validate(rules: [:context], raise_errors: true)
-            end
+            # if !@config[:skip_validation] && ( !@checkpoints.any? || depth > @checkpoints.keys.last )
+            #   if self.class.name =~ /UtxoStore/
+            #     @config[:utxo_cache] = 0
+            #     @config[:block_cache] = 120
+            #   end
+            #   validator.validate(rules: [:context], raise_errors: true)
+            # end
+
             return persist_block(blk, MAIN, depth, prev_block.work)
           else
             log.debug { "=> side (#{depth})" }
@@ -435,7 +437,7 @@ module Bitcoin::Storage
               raise "invalid network magic" unless Bitcoin.network[:magic_head] == magic
 
               size = file.read(4).unpack("L")[0]
-              blk = Bitcoin::P::Block.new(file.read(size))
+              blk = Bitcoin::P::MerkleBlock.new(file.read(size))
               depth, chain = new_block(blk)
               break  if max_depth && depth >= max_depth
             end

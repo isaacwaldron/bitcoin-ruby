@@ -105,7 +105,17 @@ module Bitcoin::Network
         @started = Time.now
         @node.push_notification(:connection, [:connected, info])
         @node.addrs << addr
+        filterload
+        send_getdata_block(Bitcoin.network[:genesis_hash])
       end
+    end
+
+    def filterload
+      addrs = @node.store.watched_addrs
+      return  unless addrs.any?
+      filter = Bitcoin::BloomFilter.new(addrs.size * 22, 0.01, 1234, :update_all)
+      addrs.each {|a| filter.insert(a.htb) }
+      send_data(Bitcoin::P.filterload_pkt(filter))
     end
 
     # received +inv_tx+ message for given +hash+.
@@ -169,6 +179,11 @@ module Bitcoin::Network
     # push block to storage queue
     def on_block(blk)
       log.debug { ">> block: #{blk.hash} (#{blk.payload.size} bytes)" }
+      @node.queue.push([:block, blk])
+    end
+
+    def on_merkle_block(blk)
+      log.debug { ">> merkle_block: #{blk.hash}" }
       @node.queue.push([:block, blk])
     end
 
@@ -246,6 +261,7 @@ module Bitcoin::Network
         :to         => @host,
         :user_agent => "/bitcoin-ruby:#{Bitcoin::VERSION}/",
         #:user_agent => "/Satoshi:0.8.3/",
+        :relay      => false,
       })
       send_data(version.to_pkt)
       log.debug { "<< version: #{Bitcoin.network[:protocol_version]}" }
@@ -269,7 +285,7 @@ module Bitcoin::Network
 
     # send +getdata block+ message for given block +hash+
     def send_getdata_block(hash)
-      pkt = Protocol.getdata_pkt(:block, [hash])
+      pkt = Protocol.getdata_pkt(:merkle_block, [hash])
       log.debug { "<< getdata block: #{hash.hth}" }
       send_data(pkt)
     end

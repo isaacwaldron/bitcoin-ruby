@@ -7,17 +7,23 @@ class Bitcoin::BloomFilter
   MAX_SIZE = 36000
   MAX_HASH_FUNCS = 50
 
-  UPDATE_NONE = 0
-  UPDATE_ALL = 1
-  UPDATE_P2PUBKEY_ONLY = 2
-  UPDATE_MASK = 3
-
   LN2SQUARED = 0.4804530139182014246671025263266649717305529515945455
   LN2 = 0.6931471805599453094172321214581765680755001343602552
 
+  # Tells the remote node our desired update behaviour when transactions are matched
+  UPDATE_FLAGS = [
+    # means the filter is not adjusted when a match is found.
+    :update_none,
+    # means if the filter matches any data element in a scriptPubKey the outpoint is
+    # serialized and inserted into the filter.
+    :update_all,
+    # means the outpoint is inserted into the filter only if a data element in the scriptPubKey is
+    # matched, and that script is of the standard "pay to pubkey" or "pay to multisig" forms.
+    :update_p2pubkey_only] 
+
   attr_reader :size, :fp_rate, :tweak, :flags, :hash_funcs, :data
 
-  def initialize size, fp_rate, tweak, flags
+  def initialize size, fp_rate, tweak, flags = :update_none
     @data = Array.new([-1 / LN2SQUARED * size * Math.log(fp_rate), MAX_SIZE * 8].min / 8, 0)
     @hash_funcs = [@data.size * 8 / size * LN2, MAX_HASH_FUNCS].min.to_i
     @size, @fp_rate, @tweak, @flags = size, fp_rate, tweak, flags
@@ -58,7 +64,7 @@ class Bitcoin::BloomFilter
   end
 
   def serialize
-    (ser_string(@data.map(&:chr).join) + [@hash_funcs, @tweak, @flags].pack("IIC")).unpack("H*")[0]
+    (ser_string(@data.map(&:chr).join) + [@hash_funcs, @tweak, UPDATE_FLAGS.index(@flags)].pack("IIC")).unpack("H*")[0]
   end
 
   def deserialize str
@@ -66,6 +72,7 @@ class Bitcoin::BloomFilter
     @data, str = *deser_string(str)
     @data = @data.split("").map(&:ord)
     @hash_funcs, @tweak, @flags = *str.unpack("IIC")
+    @flags = UPDATE_FLAGS[@flags]
   end
 
   def ser_string(s)

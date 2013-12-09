@@ -3,7 +3,7 @@ include Bitcoin
 
 describe BloomFilter do
 
-  before { @filter = BloomFilter.new(10, 0.1, 0, BloomFilter::UPDATE_ALL) }
+  before { @filter = BloomFilter.new(10, 0.1, 0, :update_all) }
 
   it "should do rotl32" do
     {
@@ -60,7 +60,7 @@ describe BloomFilter do
     @filter.tweak.should == 0
     @filter.hash_funcs.should == 2
 
-    @filter = BloomFilter.new(10, 1.0, 0, BloomFilter::UPDATE_ALL)
+    @filter = BloomFilter.new(10, 1.0, 0)
     @filter.contains("foo").should == true
   end
 
@@ -69,7 +69,7 @@ describe BloomFilter do
     @filter.insert("foobar")
     @filter.serialize.should == data
     
-    filter = BloomFilter.new(10, 0.1, 0, BloomFilter::UPDATE_ALL)
+    filter = BloomFilter.new(10, 0.1, 0, :update_all)
     filter.deserialize(data)
     
     [:size, :fp_rate, :tweak, :flags, :hash_funcs, :data].each do |m|
@@ -78,10 +78,10 @@ describe BloomFilter do
 
     filter.contains("foobar").should == true
 
-    @filter = BloomFilter.new(10000, 0.1, 0, BloomFilter::UPDATE_ALL)
+    @filter = BloomFilter.new(10000, 0.1, 0)
     @filter.insert("foobar")
 
-    filter = BloomFilter.new(10000, 0.1, 0, BloomFilter::UPDATE_ALL)
+    filter = BloomFilter.new(10000, 0.1, 0)
     filter.deserialize(@filter.serialize)
 
     [:size, :fp_rate, :tweak, :flags, :hash_funcs, :data].each do |m|
@@ -92,7 +92,7 @@ describe BloomFilter do
   end
 
   it "should create, insert and serialize" do
-    @filter = BloomFilter.new(3, 0.01, 0, BloomFilter::UPDATE_ALL)
+    @filter = BloomFilter.new(3, 0.01, 0, :update_all)
     t("99108ad8ed9bb6274d3980bab5a85c048f0950c8")
     f("19108ad8ed9bb6274d3980bab5a85c048f0950c8")
     t("b5a2c786d9ef4658287ced5914b37a1b4aa32eee")
@@ -102,7 +102,7 @@ describe BloomFilter do
 
   it "should create, insert and serialize with tweak" do
     # Same test as before, but we add a tweak of 100
-    @filter = BloomFilter.new(3, 0.01, 2147483649, BloomFilter::UPDATE_ALL)
+    @filter = BloomFilter.new(3, 0.01, 2147483649, :update_all)
     t("99108ad8ed9bb6274d3980bab5a85c048f0950c8")
     f("19108ad8ed9bb6274d3980bab5a85c048f0950c8")
     t("b5a2c786d9ef4658287ced5914b37a1b4aa32eee")

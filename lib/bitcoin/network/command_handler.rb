@@ -298,12 +298,12 @@ class Bitcoin::Network::CommandHandler < EM::Connection
       return respond("relay_tx", { error: "Transaction syntax invalid.",
                      details: validator.error })
     end
-    unless validator.validate(rules: [:context])
-      return respond("relay_tx", { error: "Transaction context invalid.",
-                     details: validator.error })
-    end
+    # unless validator.validate(rules: [:context])
+    #   return respond("relay_tx", { error: "Transaction context invalid.",
+    #                  details: validator.error })
+    # end
 
-    #@node.store.store_tx(tx)
+    @node.store.store_tx(tx)
     @node.relay_tx[tx.hash] = tx
     @node.relay_propagation[tx.hash] = 0
     @node.connections.select(&:connected?).sample(send).each {|c| c.send_inv(:tx, tx.hash) }

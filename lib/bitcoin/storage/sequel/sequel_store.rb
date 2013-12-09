@@ -39,6 +39,16 @@ module Bitcoin::Storage::Backends
       @head = nil
     end
 
+    def add_watched_address addr
+      hash160 = Bitcoin.hash160_from_address(addr)
+      return  if !!@db[:addr][hash160: hash160]
+      @db[:addr].insert(hash160: hash160)
+      p [:watch, addr, @db[:addr].count]
+    end
+
+    def watched_addrs
+      @db[:addr].map{|a| a[:hash160]}
+    end
     # persist given block +blk+ to storage.
     def persist_block blk, chain, depth, prev_work = 0
       @db.transaction do
@@ -110,12 +120,8 @@ module Bitcoin::Storage::Backends
     def reorg new_side, new_main
       @db.transaction do
         @db[:blk].where(hash: new_side.map {|h| h.htb.blob }).update(chain: SIDE)
-        new_main.each do |block_hash|
-          unless @config[:skip_validation]
-            get_block(block_hash).validator(self).validate(raise_errors: true)
-          end
-          @db[:blk].where(hash: block_hash.htb.blob).update(chain: MAIN)
-        end
+        #new_main.each {|b| get_block(b).validator(self).validate(raise_errors: true) }  unless @config[:skip_validation]
+        @db[:blk].where(hash: new_main.map {|h| h.htb.blob }).update(chain: MAIN)
       end
     end
 
@@ -181,7 +187,7 @@ module Bitcoin::Storage::Backends
     # store transaction +tx+
     def store_tx(tx, validate = true)
       @log.debug { "Storing tx #{tx.hash} (#{tx.to_payload.bytesize} bytes)" }
-      tx.validator(self).validate(raise_errors: true)  if validate
+      #tx.validator(self).validate(raise_errors: true)  if validate
       @db.transaction do
         transaction = @db[:tx][:hash => tx.hash.htb.blob]
         return transaction[:id]  if transaction
@@ -334,9 +340,9 @@ module Bitcoin::Storage::Backends
       txouts = @db[:addr_txout].where(:addr_id => addr[:id])
         .map{|t| @db[:txout][:id => t[:txout_id]] }
         .map{|o| wrap_txout(o) }
-      unless unconfirmed
-        txouts.select!{|o| @db[:blk][:id => o.get_tx.blk_id][:chain] == MAIN rescue false }
-      end
+      # unless unconfirmed
+      #   txouts.select!{|o| @db[:blk][:id => o.get_tx.blk_id][:chain] == MAIN rescue binding.pry }
+      # end
       txouts
     end
 
@@ -441,7 +447,7 @@ module Bitcoin::Storage::Backends
         blk = get_block_by_depth(depth)
         raise "Block hash #{blk.depth} invalid!"  unless blk.hash == blk.recalc_block_hash
         raise "Prev hash #{blk.depth} invalid!"  unless blk.prev_block.reverse.hth == prev_blk.hash
-        raise "Merkle root #{blk.depth} invalid!"  unless blk.verify_mrkl_root
+        #raise "Merkle root #{blk.depth} invalid!"  unless blk.verify_mrkl_root
         print "#{blk.hash} #{blk.depth} OK\r"
         prev_blk = blk
       end

@@ -108,14 +108,14 @@ module Bitcoin::Wallet
     end
 
     # get all Storage::Models::TxOut concerning any address from this wallet
-    def get_txouts(unconfirmed = false)
+    def get_txouts(unconfirmed = true)
       txouts = @keystore.keys.map {|k|
         @storage.get_txouts_for_address(k[:addr])}.flatten.uniq
-      (unconfirmed || @storage.class.name =~ /Utxo/) ? txouts : txouts.select {|o| !!o.get_tx.get_block}
+      (unconfirmed || @storage.class.name =~ /Utxo|Spv/) ? txouts : txouts.select {|o| !!o.get_tx.get_block}
     end
 
     # get total balance for all addresses in this wallet
-    def get_balance(unconfirmed = false)
+    def get_balance(unconfirmed = true)
       values = get_txouts(unconfirmed).select{|o| !o.get_next_in}.map(&:value)
       ([0] + values).inject(:+)
     end
