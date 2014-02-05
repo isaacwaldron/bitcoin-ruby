@@ -28,8 +28,8 @@ module Bitcoin::Validation
     attr_accessor :block, :store, :prev_block, :error
 
     RULES = {
-      syntax: [:hash, :tx_list, :bits, :max_timestamp, :coinbase, :coinbase_scriptsig, :mrkl_root, :transactions_syntax],
-      context: [:prev_hash, :difficulty, :coinbase_value, :min_timestamp, :transactions_context]
+      syntax: [:hash, :bits, :max_timestamp],
+      context: [:prev_hash, :difficulty, :min_timestamp]#, :transactions_context]
     }
 
     # TODO merged mining validations
@@ -135,10 +135,9 @@ module Bitcoin::Validation
     def min_timestamp
       return true  if store.get_depth <= 11
       d = store.get_depth
-      first = store.db[:blk][hash: block.prev_block.reverse.blob]
-      times = [first[:time]]
-      (10).times { first = store.db[:blk][hash: first[:prev_hash].blob]
-        times << first[:time] }
+      first = store.get_block(block.prev_block.reverse.hth)
+      times = [first.time]
+      (10).times { first = first.get_prev_block; times << first.time }
       times.sort!
       mid, rem = times.size.divmod(2)
       min_time = (rem == 0 ? times[mid-1, 2].inject(:+) / 2.0 : times[mid])
@@ -178,17 +177,18 @@ module Bitcoin::Validation
       max_target = Bitcoin.decode_compact_bits(Bitcoin.network[:proof_of_work_limit]).to_i(16)
       return Bitcoin.network[:proof_of_work_limit]  if index == 0
       return prev_block.bits  if (prev_block.depth + 1) % RETARGET != 0
-      last = store.db[:blk][hash: prev_block.hash.htb.blob]
-      first = store.db[:blk][hash: last[:prev_hash].blob]
-      (RETARGET-2).times { first = store.db[:blk][hash: first[:prev_hash].blob] }
 
-      nActualTimespan = last[:time] - first[:time]
+      last = prev_block
+      first = store.get_block(last.prev_block.reverse.hth)
+      (RETARGET-2).times { first = first.get_prev_block }
+
+      nActualTimespan = last.time - first.time
       nTargetTimespan = RETARGET * 600
 
       nActualTimespan = [nActualTimespan, nTargetTimespan/4].max
       nActualTimespan = [nActualTimespan, nTargetTimespan*4].min
 
-      target = Bitcoin.decode_compact_bits(last[:bits]).to_i(16)
+      target = Bitcoin.decode_compact_bits(last.bits).to_i(16)
       new_target = [max_target, (target * nActualTimespan)/nTargetTimespan].min
       Bitcoin.encode_compact_bits new_target.to_s(16)
     end
