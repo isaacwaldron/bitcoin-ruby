@@ -351,7 +351,6 @@ Bitcoin::network = :testnet
     #   end
 
     # end
->>>>>>> move to leveldb
 
   end
 

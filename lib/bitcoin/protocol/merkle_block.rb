@@ -18,7 +18,7 @@ module Bitcoin::Protocol
 
     def to_payload
       payload = super()
-      payload += [@tx_count].pack("V")
+      payload += [@tx_count || tx.count].pack("V")
       payload += Bitcoin::P.pack_var_int(@hashes.size)
       payload += @hashes.join
       payload += Bitcoin::P.pack_var_int(@flags.size)
@@ -41,18 +41,18 @@ module Bitcoin::Protocol
     attr_accessor :depth, :chain, :work
 
     def initialize data = nil
-      @depth = Bitcoin::P::unpack_var_int(data)
-      @chain = Bitcoin::P::unpack_var_int(data)
-      @work = Bitcoin::P::unpack_var_int(data)
+      # @depth = Bitcoin::P::unpack_var_int(data)
+      # @chain = Bitcoin::P::unpack_var_int(data)
+      # @work = Bitcoin::P::unpack_var_int(data)
       data = super(data)
       # @depth, @chain, @work = *(data.to_s[0..2].split("").map(&:to_i))#.unpack("VVV")
     end
 
     def to_payload
-      payload  = Bitcoin::P::pack_var_int(@depth)
-      payload += Bitcoin::P::pack_var_int(@chain)
-      payload += Bitcoin::P::pack_var_int(@work)
-      payload += super()
+      # payload  = Bitcoin::P::pack_var_int(@depth)
+      # payload += Bitcoin::P::pack_var_int(@chain)
+      # payload += Bitcoin::P::pack_var_int(@work)
+      payload = super()
 
       # payload += [@depth, @chain, @work].map(&:to_s).join#pack("VVV")
 

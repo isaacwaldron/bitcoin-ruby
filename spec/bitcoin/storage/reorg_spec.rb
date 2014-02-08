@@ -10,10 +10,11 @@ Bitcoin::Validation::Block::RETARGET = 10
 
 [
 # [:utxo, :sqlite, index_all_addrs: true],
- [:sequel, :sqlite], # [:sequel, :postgres],
+# [:sequel, :sqlite], # [:sequel, :postgres],
 # [:utxo, :postgres, index_all_addrs: true],
 # [:sequel, :mysql],
 # [:utxo, :mysql, index_all_addrs: true],
+ [:spv, "spec/test_spv"],
 ].compact.each do |options|
 
   next  unless storage = setup_db(*options)
@@ -217,7 +218,7 @@ Bitcoin::Validation::Block::RETARGET = 10
     @store.get_head.hash.should =~ /000000002f264d65040/
 
 
-    balance("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa").should == 10000000000
+#    balance("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa").should == 10000000000
 
     # balance("1NiEGXeURREqqMjCvjCeZn6SwEBZ9AdVet").should == 0
 
