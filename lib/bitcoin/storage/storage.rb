@@ -13,7 +13,7 @@ module Bitcoin::Storage
   @log = Bitcoin::Logger.create(:storage)
   def self.log; @log; end
 
-  BACKENDS = [:dummy, :sequel, :utxo]
+  BACKENDS = [:dummy, :sequel, :utxo, :spv]
   BACKENDS.each do |name|
     module_eval <<-EOS
       def self.#{name} config, *args
@@ -152,7 +152,7 @@ module Bitcoin::Storage
         res = store_block(blk)
         log.info { "block #{blk.hash} " +
           "[#{res[0]}, #{['main', 'side', 'orphan'][res[1]]}] " +
-          "(#{"%.4fs, %3dtx, %.3fkb" % [(Time.now - time), blk.tx.size, blk.to_payload.bytesize.to_f/1000]})" }  if res && res[1]
+          "(#{"%.4fs, %3dtx, %.3fkb" % [(Time.now - time), blk.tx.size, blk.payload.bytesize.to_f/1000]})" }  if res && res[1]
         res
       end
 
