@@ -144,26 +144,26 @@ module Bitcoin::Storage::Backends
       [script_type, addrs, names]
     end
 
-    # bulk-store addresses and txout mappings
-    def persist_addrs addrs
-      addr_txouts, new_addrs = [], []
-      addrs.group_by {|_, a| a }.each do |hash160, txouts|
-        if existing = @db[:addr][:hash160 => hash160]
-          txouts.each {|id, _| addr_txouts << [existing[:id], id] }
-        else
-          new_addrs << [hash160, txouts.map {|id, _| id }]
-        end
-      end
-      new_addr_ids = @db[:addr].insert_multiple(new_addrs.map {|hash160, txout_id|
-        { hash160: hash160 } })
-      new_addr_ids.each.with_index do |addr_id, idx|
-        new_addrs[idx][1].each do |txout_id|
-          addr_txouts << [addr_id, txout_id]
-        end
-      end
-      @db[:addr_txout].insert_multiple(addr_txouts.map {|addr_id, txout_id|
-        { addr_id: addr_id, txout_id: txout_id }})
-    end
+    # # bulk-store addresses and txout mappings
+    # def persist_addrs addrs
+    #   addr_txouts, new_addrs = [], []
+    #   addrs.group_by {|_, a| a }.each do |hash160, txouts|
+    #     if existing = @db[:addr][:hash160 => hash160]
+    #       txouts.each {|id, _| addr_txouts << [existing[:id], id] }
+    #     else
+    #       new_addrs << [hash160, txouts.map {|id, _| id }]
+    #     end
+    #   end
+    #   new_addr_ids = @db[:addr].insert_multiple(new_addrs.map {|hash160, txout_id|
+    #     { hash160: hash160 } })
+    #   new_addr_ids.each.with_index do |addr_id, idx|
+    #     new_addrs[idx][1].each do |txout_id|
+    #       addr_txouts << [addr_id, txout_id]
+    #     end
+    #   end
+    #   @db[:addr_txout].insert_multiple(addr_txouts.map {|addr_id, txout_id|
+    #     { addr_id: addr_id, txout_id: txout_id }})
+    # end
 
     # prepare transaction data for storage
     def tx_data tx

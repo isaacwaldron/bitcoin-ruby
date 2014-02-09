@@ -4,15 +4,17 @@ module Bitcoin::Protocol
 
     attr_accessor :hashes, :flags, :depth, :chain, :work
 
-    def initialize data = nil
-      @tx, @hashes, @flags = [], [], []
+    def initialize data = nil, header_only = true
+      @tx = []
+      @tx_count, @hashes, @flags = 0, [], []
       return  unless data
       data = StringIO.new(data)  unless data.is_a?(StringIO)
-      buf = parse_data_from_io(data, true)
-      hash_count = Bitcoin::P::unpack_var_int_from_io(buf)
-      hash_count.times { @hashes << buf.read(32) }
-      flag_count = Bitcoin::P::unpack_var_int_from_io(buf)
-      @flags = buf.read(flag_count).unpack("C*")
+      @tx_count = @tx.count# @tx = []
+      buf = parse_data_from_io(data, header_only)
+      # hash_count = Bitcoin::P::unpack_var_int_from_io(buf)
+      # hash_count.times { @hashes << buf.read(32) }
+      # flag_count = Bitcoin::P::unpack_var_int_from_io(buf)
+      # @flags = buf.read(flag_count).unpack("C*")
       buf
     end
 
@@ -27,10 +29,21 @@ module Bitcoin::Protocol
       payload
     end
 
+    def self.from_block_payload data
+      b = new data
+#      b.tx = blk.tx
+      b.hashes = b.tx.map(&:hash).map(&:htb)
+      b.tx_count = b.tx.count
+      #      b.tx = []
+      # TODO: flags
+      b
+    end
+
     def self.from_block blk
+#      blk.tx = []
       b = new blk.to_payload
       b.tx = blk.tx
-      b.hashes = blk.tx.map(&:hash).map(&:htb)
+      # b.hashes = blk.tx.map(&:hash).map(&:htb)
       # TODO: flags
       b
     end
