@@ -38,42 +38,31 @@ module Bitcoin::Storage::Backends
       @head = nil
     end
 
-    def add_watched_address addr
-      @watched_addrs = watched_addrs
-      @watched_addrs << addr
+    def add_watched_address addr, depth = 0
+      @watched_addrs = (JSON.load(@db["watched_addrs"]) || [])
+      @watched_addrs << [addr, depth]
       @db["watched_addrs"] = @watched_addrs.to_json
-      log.info { "Added watched address #{addr}, now watching #{addrs.count}." }
+      log.info { "Added watched address #{addr}, now watching #{@watched_addrs.count}." }
     end
 
-    def watched_addrs
-      # @watched_addrs ||= (JSON.load(@db["watched_addrs"]) || [])
-      []
+    def watched_addrs depth
+      @watched_addrs ||= (JSON.load(@db["watched_addrs"]) || [])
+      @watched_addrs.map {|a, d| a  if d <= depth }.compact
+    end
+
+    def watch_addrs? depth = 0
+      watched_addrs(depth).any? || @config[:watch_all_addrs]
     end
 
     # persist given block +blk+ to storage.
     def persist_block blk, chain, depth, prev_work = 0
 
-      blk = Bitcoin::P::MerkleBlock.from_block(blk)
+#      blk = Bitcoin::P::MerkleBlock.from_block(blk, false)
 
       blk.chain, blk.depth, blk.work = chain, depth, prev_work + blk.block_work
 
-      # attrs = {
-      #   :depth => depth,
-      #   :chain => chain,
-
-      #   :version => blk.ver,
-      #   :prev_hash => blk.prev_block.hth,
-      #   :mrkl_root => blk.mrkl_root.hth,
-      #   :time => blk.time,
-      #   :bits => blk.bits,
-      #   :nonce => blk.nonce,
-      #   :work => (prev_work + blk.block_work).to_s,
-
-      #   :hashes => blk.hashes,
-      #   :flags => blk.flags,
-      # }
-
-      # attrs[:aux_pow] = blk.aux_pow.to_payload.blob  if blk.aux_pow
+      # make sure blk.to_payload is only the header and no tx data
+      tx = blk.tx; blk.tx = []
 
       key = chain == 2 ? "o#{blk.hash.htb}" : "b#{blk.hash.htb}"
       @db[key] = blk.to_disk
@@ -83,21 +72,21 @@ module Bitcoin::Storage::Backends
         @db["d#{depth}"] = blk.hash.htb
       end
 
-      blk.tx.each {|tx| store_tx(tx) }  if watched_addrs.any?
+      tx.each.with_index {|tx, idx| store_tx(tx, true, blk, idx) }  if watch_addrs?(depth)
 
-#      if !@last_block || @last_block.to_i < Time.now.to_i - 10
-      # connect orphans
-      @db.range("o", "p") do |hash, data|
-        orphan = wrap_block(Bitcoin::P::MerkleBlock.from_disk(data))
-        if orphan.prev_block.reverse.hth == blk.hash
-          begin
-            store_block(orphan)
-          rescue SystemStackError
-            EM.defer { store_block(orphan) }  if EM.reactor_running?
+      if !@last_block || @last_block.to_i < Time.now.to_i - 10
+        # connect orphans
+        @db.range("o", "p") do |hash, data|
+          orphan = wrap_block(Bitcoin::P::MerkleBlock.from_disk(data))
+          if orphan.prev_block.reverse.hth == blk.hash
+            begin
+              store_block(orphan)
+            rescue SystemStackError
+              EM.defer { store_block(orphan) }  if EM.reactor_running?
+            end
           end
         end
       end
-#      end
       @last_block = Time.now
 
       return depth, chain
@@ -114,93 +103,32 @@ module Bitcoin::Storage::Backends
         blk = Bitcoin::P::MerkleBlock.from_disk(@db["b#{hash.htb}"])
         blk.chain = 0
         @db["b#{hash.htb}"] = blk.to_disk
-        @db["d#{blk.depth}"] = hash
+        @db["d#{blk.depth}"] = hash.htb
       end
-    end
-
-    # parse script and collect address/txout mappings to index
-    def parse_script txout, i, tx_hash = "", tx_idx
-      addrs, names = [], []
-
-      script = Bitcoin::Script.new(txout.pk_script) rescue nil
-      if script
-        if script.is_hash160? || script.is_pubkey?
-          addrs << [i, script.get_hash160]
-        elsif script.is_multisig?
-          script.get_multisig_pubkeys.map do |pubkey|
-            addrs << [i, Bitcoin.hash160(pubkey.unpack("H*")[0])]
-          end
-        elsif Bitcoin.namecoin? && script.is_namecoin?
-          addrs << [i, script.get_hash160]
-          names << [i, script]
-        else
-          log.info { "Unknown script type in #{tx_hash}:#{tx_idx}" }
-          log.debug { script.to_string }
-        end
-        script_type = SCRIPT_TYPES.index(script.type)
-      else
-        log.error { "Error parsing script #{tx_hash}:#{tx_idx}" }
-        script_type = SCRIPT_TYPES.index(:unknown)
-      end
-      [script_type, addrs, names]
-    end
-
-    # # bulk-store addresses and txout mappings
-    # def persist_addrs addrs
-    #   addr_txouts, new_addrs = [], []
-    #   addrs.group_by {|_, a| a }.each do |hash160, txouts|
-    #     if existing = @db[:addr][:hash160 => hash160]
-    #       txouts.each {|id, _| addr_txouts << [existing[:id], id] }
-    #     else
-    #       new_addrs << [hash160, txouts.map {|id, _| id }]
-    #     end
-    #   end
-    #   new_addr_ids = @db[:addr].insert_multiple(new_addrs.map {|hash160, txout_id|
-    #     { hash160: hash160 } })
-    #   new_addr_ids.each.with_index do |addr_id, idx|
-    #     new_addrs[idx][1].each do |txout_id|
-    #       addr_txouts << [addr_id, txout_id]
-    #     end
-    #   end
-    #   @db[:addr_txout].insert_multiple(addr_txouts.map {|addr_id, txout_id|
-    #     { addr_id: addr_id, txout_id: txout_id }})
-    # end
-
-    # prepare transaction data for storage
-    def tx_data tx
-      { hash: tx.hash.htb.blob,
-        version: tx.ver, lock_time: tx.lock_time,
-        coinbase: tx.in.size == 1 && tx.in[0].coinbase?,
-        tx_size: tx.payload.bytesize }
     end
 
     # store transaction +tx+
-    def store_tx(tx, validate = true)
-      if watched_addrs.any?
+    def store_tx(tx, validate = true, block = nil, idx = nil)
+      if !block || watch_addrs?(block.depth)
+        watched_addrs = watched_addrs(block ? block.depth : @head.depth)
         relevant = false
         # TODO optimize
-        # maybe just matching the hash160 against the raw pk_script is faster
         tx.out.each.with_index {|o,i|
-          next  unless o.pk_script =~ /[#{watched_addrs.join("|")}]/
-          relevant = true
-          break
-
-          # script = Bitcoin::Script.new(o.pk_script)
-          # address = script.get_hash160
-          # relevant = true  if watched_addrs.include?(address)
+          script = Bitcoin::Script.new(o.pk_script)
+          address = script.get_hash160
+          relevant = true  if @config[:watch_all_addrs] || watched_addrs.include?(address)
         }
         tx.in.each {|i|
-          next  unless prev_out = get_tx(i.prev_out.reverse_hth).out[i.prev_out_index]
-          next  unless prev_out.pk_script =~ /[#{watched_addrs.join("|")}]/
-          relevant = true
-          break
-          # relevant = true  if (Bitcoin::Script.new(prev_out.pk_script).get_addresses.map {|a| Bitcoin.hash160_from_address(a) } & watched_addrs).any?
+          next  unless prev_tx = get_tx(i.prev_out.reverse_hth)
+          next  unless prev_out = prev_tx.out[i.prev_out_index]
+          relevant = true  if @config[:watch_all_addrs] ||
+            (Bitcoin::Script.new(prev_out.pk_script).get_addresses.map {|a|
+             Bitcoin.hash160_from_address(a) } & watched_addrs).any?
         }
         return  unless relevant
       else
         return
       end
-
       @log.debug { "Storing tx #{tx.hash} (#{tx.to_payload.bytesize} bytes)" }
       @db["t#{tx.hash.htb}"] = tx.payload
     end
@@ -247,31 +175,11 @@ module Bitcoin::Storage::Backends
       get_block(@db["d#{get_block(prev_hash).depth + 1}"])
     end
 
-    # # get block by given +tx_hash+
-    # def get_block_by_tx(tx_hash)
-    #   TODO
-    # end
-
     # get transaction for given +tx_hash+
     def get_tx(tx_hash)
-      wrap_tx(Bitcoin::P::Tx.new(@db["t#{tx_hash.htb}"]))
+      return  nil  unless data = @db["t#{tx_hash.htb}"]
+      wrap_tx(Bitcoin::P::Tx.new(data))
     end
-
-    # # get corresponding Models::TxIn for the txout in transaction
-    # # +tx_hash+ with index +txout_idx+
-    # def get_txin_for_txout(tx_hash, txout_idx)
-    #   TODO
-    # end
-
-    # # get corresponding Models::TxOut for +txin+
-    # def get_txout_for_txin(txin)
-    #   TODO
-    # end
-
-    # # get all Models::TxOut matching given +script+
-    # def get_txouts_for_pk_script(script)
-    #   TODO
-    # end
 
     # get all Models::TxOut matching given +hash160+
     def get_txouts_for_hash160(hash160, unconfirmed = false)
@@ -288,11 +196,6 @@ module Bitcoin::Storage::Backends
       # TODO: select confirmed
       txouts
     end
-
-    # # Grab the position of a tx in a given block
-    # def get_idx_from_tx_hash(tx_hash)
-    #   TODO
-    # end
 
     # wrap given +block+ into Models::Block
     def wrap_block(block)
@@ -355,9 +258,6 @@ module Bitcoin::Storage::Backends
       txout.value = output.value
       txout.pk_script = output.pk_script
       txout
-    end
-
-    def check_consistency count = 1000
     end
 
   end

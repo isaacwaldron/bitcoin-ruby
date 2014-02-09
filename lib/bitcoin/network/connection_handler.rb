@@ -106,12 +106,12 @@ module Bitcoin::Network
         @node.push_notification(:connection, [:connected, info])
         @node.addrs << addr
         filterload
-        send_getdata_block(Bitcoin.network[:genesis_hash])
+        send_getdata_block(Bitcoin.network[:genesis_hash].htb)
       end
     end
 
     def filterload
-      addrs = @node.store.watched_addrs
+      addrs = @node.store.watched_addrs @node.store.get_depth
       return  unless addrs.any?
       filter = Bitcoin::BloomFilter.new(addrs.size * 22, 0.01, 1234, :update_all)
       addrs.each {|a| filter.insert(a.htb) }

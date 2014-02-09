@@ -39,9 +39,9 @@ module Bitcoin::Protocol
       b
     end
 
-    def self.from_block blk
+    def self.from_block blk, header_only = true
 #      blk.tx = []
-      b = new blk.to_payload
+      b = new blk.to_payload, header_only
       b.tx = blk.tx
       # b.hashes = blk.tx.map(&:hash).map(&:htb)
       # TODO: flags

@@ -95,7 +95,7 @@ module Bitcoin
           @tx << t
         }
 
-#        @payload = to_payload
+        @payload = to_payload
         buf
       end
 

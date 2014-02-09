@@ -536,6 +536,7 @@ module Bitcoin
         # 542 contains invalid transaction
         542 => "0000000083c1f82cf72c6724f7a317325806384b06408bce7a4327f418dfd5ad",
         71018 => "000000000010dd93dc55541116b2744eb8f4c3b706df6e8512d231a03fb9e435",
+        180606 => "00000000a132e751c0ad9ce04ee85ab98b344844b761f14236acbfe3c389a8e7"
       }
     },
 

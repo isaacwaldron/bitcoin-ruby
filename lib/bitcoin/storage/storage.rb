@@ -422,6 +422,10 @@ module Bitcoin::Storage
         raise "Not implemented"
       end
 
+      def check_consistency *a
+        log.warn { "Consistency check not implemented" }
+      end
+
       # import satoshi bitcoind blk0001.dat blockchain file
       def import filename, max_depth = nil
         if File.file?(filename)
@@ -452,7 +456,9 @@ module Bitcoin::Storage
       end
 
       def in_sync?
-        (get_head && (Time.now - get_head.time).to_i < 3600) ? true : false
+        in_sync = (get_head && (Time.now - get_head.time).to_i < 3600) ? true : false
+        log.info { "Storage in sync with blockchain." }  if in_sync && !@in_sync
+        @in_sync = in_sync
       end
 
     end

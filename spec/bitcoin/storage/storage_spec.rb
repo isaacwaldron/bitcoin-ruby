@@ -142,6 +142,14 @@ Bitcoin::network = :testnet
         @store.get_block("00000007199508e34a9ff81e6ec0c477a4cccff2a4767a8eee39c11db367b008")
     end
 
+    it "should filter watched addrs" do
+      @key = Bitcoin::Key.generate
+      @store.add_watched_address @key.hash160, @store.get_depth + 2
+      block = create_block(@store.get_head.hash, true, [], @key)
+      @store.get_tx(block.tx[0].hash).should == nil
+      block = create_block(block.hash, true, [], @key)
+      @store.get_tx(block.tx[0].hash).hash.should == block.tx[0].hash
+    end
 
 
 
@@ -163,20 +171,21 @@ Bitcoin::network = :testnet
     # if @store.class.name =~ /SequelStore/
     #   describe :transactions do
 
-    #     it "should store tx" do
-    #       @store.store_tx(@tx, false).should != false
-    #     end
+        it "should store tx" do
+          @store.store_tx(@tx, false).should != false
+        end
         
-    #     it "should not store tx if already stored and return existing id" do
-    #       id = @store.store_tx(@tx, false)
-    #       @store.store_tx(@tx, false).should == id
-    #     end
+        it "should not store tx if already stored and return existing id" do
+          id = @store.store_tx(@tx, false)
+          @store.store_tx(@tx, false).should == id
+        end
 
-    #     it "should check if tx is already stored" do
-    #       @store.has_tx(@tx.hash).should == false
-    #       @store.store_tx(@tx, false)
-    #       @store.has_tx(@tx.hash).should == true
-    #     end
+        it "should check if tx is already stored" do
+          @store.add_watched_address Script.new(@tx.out[0].pk_script).get_hash160
+          @store.has_tx(@tx.hash).should == false
+          @store.store_tx(@tx, false)
+          @store.has_tx(@tx.hash).should == true
+        end
 
     #     it "should store hash160 for txout" do
     #       @store.store_tx(@tx, false)
@@ -184,14 +193,15 @@ Bitcoin::network = :testnet
     #         .should == "3129d7051d509424d23d533fa2d5258977e822e3"
     #     end
 
-    #     it "should get tx" do
-    #       @store.store_tx(@tx, false)
-    #       @store.get_tx(@tx.hash).should == @tx
-    #     end
+        it "should get tx" do
+          @store.add_watched_address Script.new(@tx.out[0].pk_script).get_hash160
+          @store.store_tx(@tx, false)
+          @store.get_tx(@tx.hash).should == @tx
+        end
 
-    #     it "should not get tx" do
-    #       @store.get_tx("nonexistant").should == nil
-    #     end
+        it "should not get tx" do
+          @store.get_tx("nonexistant").should == nil
+        end
 
     #     it "should get the position for a given tx" do
     #       @store.store_block(@blk)
