@@ -152,7 +152,7 @@ module Bitcoin::Storage
         res = store_block(blk)
         log.info { "block #{blk.hash} " +
           "[#{res[0]}, #{['main', 'side', 'orphan'][res[1]]}] " +
-          "(#{"%.6fs, %3dtx, %.3fkb" % [(Time.now - time), blk.tx.size, blk.payload.bytesize.to_f/1000]})" }  if res && res[1]
+          "(#{"%.6fs, %3dtx, %.3fkb" % [(Time.now - time), blk.tx.size, blk.to_payload.bytesize.to_f/1000]})" }  if res && res[1]
         res
       end
 

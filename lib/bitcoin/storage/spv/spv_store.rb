@@ -53,7 +53,7 @@ module Bitcoin::Storage::Backends
 
       blk = Bitcoin::P::MerkleBlock.from_block(blk)
 
-      blk.chain, blk.depth, blk.work = chain, depth, prev_work + blk.work
+      blk.chain, blk.depth, blk.work = chain, depth, prev_work + blk.block_work
 
       # attrs = {
       #   :depth => depth,
@@ -74,7 +74,7 @@ module Bitcoin::Storage::Backends
       # attrs[:aux_pow] = blk.aux_pow.to_payload.blob  if blk.aux_pow
 
       key = chain == 2 ? "o#{blk.hash}" : "b#{blk.hash}"
-      @db[key] = attrs.to_json
+      @db[key] = blk.to_disk
       if chain == MAIN
         @head = blk
         @db["head"] = blk.hash  
@@ -85,8 +85,8 @@ module Bitcoin::Storage::Backends
 
 #      if !@last_block || @last_block.to_i < Time.now.to_i - 10
       # connect orphans
-      @db.range("o", "p") do |hash, attrs|
-        orphan = wrap_block(JSON.load(attrs))
+      @db.range("o", "p") do |hash, data|
+        orphan = wrap_block(Bitcoin::P::MerkleBlock.from_disk(data))
         if orphan.prev_block.reverse.hth == blk.hash
           begin
             store_block(orphan)
@@ -103,16 +103,16 @@ module Bitcoin::Storage::Backends
 
     def reorg new_side, new_main
       new_side.each do |hash|
-        attrs = JSON.load(@db["b#{hash}"])
-        attrs["chain"] = 1
-        @db["b#{hash}"] = attrs.to_json
+        blk = Bitcoin::P::MerkleBlock.from_disk(@db["b#{hash}"])
+        blk.chain = 1
+        @db["b#{hash}"] = blk.to_disk
       end
 
       new_main.each do |hash|
-        attrs = JSON.load(@db["b#{hash}"])
-        attrs["chain"] = 0
-        @db["b#{hash}"] = attrs.to_json
-        @db["d#{attrs["depth"]}"] = hash
+        blk = Bitcoin::P::MerkleBlock.from_disk(@db["b#{hash}"])
+        blk.chain = 0
+        @db["b#{hash}"] = blk.to_disk
+        @db["d#{blk.depth}"] = hash
       end
 
     end
@@ -220,7 +220,7 @@ module Bitcoin::Storage::Backends
 
     # get block for given +blk_hash+
     def get_block(blk_hash)
-      wrap_block(JSON.load(@db["b#{blk_hash}"]))
+      wrap_block(Bitcoin::P::MerkleBlock.from_disk(@db["b#{blk_hash}"]))
     end
 
     # get block by given +depth+
@@ -282,23 +282,22 @@ module Bitcoin::Storage::Backends
 
     # wrap given +block+ into Models::Block
     def wrap_block(block)
-
       return nil  unless block
 
-      data = { id: block["depth"], depth: block["depth"], chain: block["chain"], work: block["work"].to_i, size: block["blk_size"]}
+      data = { id: block.depth, depth: block.depth, chain: block.chain, work: block.work.to_i }
       blk = Bitcoin::Storage::Models::Block.new(self, data)
 
-      blk.ver = block["version"]
-      blk.prev_block = block["prev_hash"].htb
-      blk.mrkl_root = block["mrkl_root"].htb
-      blk.time = block["time"].to_i
-      blk.bits = block["bits"]
-      blk.nonce = block["nonce"]
+      blk.ver = block.ver
+      blk.prev_block = block.prev_block
+      blk.mrkl_root = block.mrkl_root
+      blk.time = block.time
+      blk.bits = block.bits
+      blk.nonce = block.nonce
 
-      blk.aux_pow = Bitcoin::P::AuxPow.new(block["aux_pow"])  if block["aux_pow"]
+      blk.aux_pow = block.aux_pow  if block.aux_pow
 
-      blk.hashes = block["hashes"]
-      blk.flags = block["flags"]
+      blk.hashes = block.hashes
+      blk.flags = block.flags
 
       blk.recalc_block_hash
       blk

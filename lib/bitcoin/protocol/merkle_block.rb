@@ -36,6 +36,7 @@ module Bitcoin::Protocol
     end
 
     def self.from_disk data
+      return nil  unless data
       depth, data = Bitcoin::P::unpack_var_int(data)
       chain, data = Bitcoin::P::unpack_var_int(data)
       work, data = Bitcoin::P::unpack_var_int(data)
