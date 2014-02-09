@@ -83,20 +83,19 @@ module Bitcoin
 
         return buf if buf.eof?
 
-        if self.is_a?(MerkleBlock)
-          @tx_count = buf.read(4).unpack("V")[0]
-        else
+#        if self.is_a?(MerkleBlock)
+#          @tx_count = buf.read(4).unpack("V")[0]
+#        else
           @tx_count = Protocol.unpack_var_int_from_io(buf)
-        end
+#        end
         return buf if header_only
-
         @tx_count.times{  break if payload == true
           t = Tx.new(nil)
           payload = t.parse_data_from_io(buf)
           @tx << t
         }
 
-        @payload = to_payload
+#        @payload = to_payload
         buf
       end
 
